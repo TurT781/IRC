@@ -2,10 +2,17 @@
   "dependencies": {
     "@socket.io/cluster-adapter": "^0.2.2",
     "@socket.io/mongo-adapter": "^0.3.2",
+    "axios": "^1.7.9",
+    "cor": "^0.0.0",
+    "cors": "^2.8.5",
     "express": "^4.21.2",
     "mongodb": "^6.13.0",
+    "mongoose": "^8.10.1",
     "socket.io": "^4.8.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }

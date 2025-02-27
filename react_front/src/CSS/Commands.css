@@ -1,0 +1,84 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    scroll-behavior: smooth;
+}
+
+:root {
+    /* background */
+    --bg-color: #191970;
+    /* text */
+    --text-color: #d3d3d3;
+    /* color user message */
+    --main-color: #006f3c;
+    /* color foreign message */
+    --secondary-color: #022954;
+    /* color btn link */
+    --btn-color: #f9a73e;
+    /* header color */
+    --header-color: #404066;
+}
+
+.main{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    align-content: center;
+    flex-direction: column;
+}
+
+.btnHome{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    align-content: center;
+    flex-direction: column;
+    padding: 10px 20px;
+    background-color: var(--btn-color);
+    border: none;
+    border-radius: 10px;
+    color: #000;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.pagesCommands {
+    width: 80%;
+    max-width: 600px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 20px;
+    text-align: left;
+    box-shadow: var(--text-color) 2px 5px 5px;
+}
+
+.content {
+    padding: 10px;
+}
+
+.textCommands {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    color: var(--text-color);
+}
+
+hr {
+    border: none;
+    height: 1px;
+    background-color: var(--text-color);
+    margin: 10px 0;
+}
+
+.boxBtn {
+    margin-top: 20px;
+}
+
+.LinkHome {
+    text-decoration: none;
+}
+
+.btnHome:hover {
+    background-color: #d98c2c;
+}

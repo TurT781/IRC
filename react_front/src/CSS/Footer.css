@@ -1,0 +1,157 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    scroll-behavior: smooth;
+    font-family: Cambria, Cochin, Georgia, Times, 'Times New Roman', serif;
+}
+
+:root {
+    /* background */
+    --bg-color: #d4d4d4;
+    /* text */
+    --text-color: #d3d3d3;
+    /* color user message */
+    --main-color: #006f3c;
+    /* color foreign message */
+    --secondary-color: #022954;
+    /* third color */
+    --third-color: #16163d;
+    /* color btn link */
+    --btn-color: #f9a73e;
+}
+
+.footer {
+    background-color: var(--secondary-color);
+    padding: 20px 20px;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    height: 70px;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.footer form {
+    display: flex;
+    flex-grow: 1;
+    justify-content: space-evenly;
+    align-items: center;
+    width: 100%;
+}
+
+.footer input {
+    flex-grow: 3;
+    padding: 10px;
+    border: none;
+    border-radius: 20px;
+    background-color: var(--third-color);
+    color: var(--text-color);
+    font-size: 16px;
+    outline: none;
+    transition: background 0.3s ease-in-out;
+    margin: 10px;
+}
+
+.footer input::placeholder {
+    color: rgba(211, 211, 211, 0.7);
+}
+
+.footer input:focus {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: solid 2px #006f3c;
+}
+
+.footer button {
+    flex-grow: 1;
+    margin: 0 5px;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.3s ease-in-out;
+}
+
+.footer button[type="submit"] {
+    background-color: var(--main-color);
+    font-weight: bold;
+    color: white;
+}
+
+.footer button[type="submit"]:hover {
+    background-color: #16831b;
+}
+
+.footer button:first-child {
+    background-color: #e68a20;
+    font-weight: bold;
+    color: white;
+}
+
+.footer button:first-child:hover {
+    background-color: #f6a43a;
+}
+
+.formFooter {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    padding: 2vh;
+    width: 100%;
+}
+
+.leavingButton {
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.leavingButton.connected {
+    background-color: #ff4d4d !important;
+    color: white;
+    border: 1px solid #ff4d4d !important;
+}
+
+.leavingButton.connected:hover {
+    background-color: rgb(247, 38, 38) !important;
+}
+
+.leavingButton.disconnected {
+    background-color: #4CAF50 !important;
+    color: white;
+    border: 1px solid #4CAF50 !important;
+}
+
+.leavingButton.disconnected:hover {
+    background-color: rgb(28, 189, 58) !important;
+}
+
+input:disabled {
+    background-color: #4a4a4a;
+    cursor: not-allowed;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.notification-content {
+    display: inline-block;
+    background-color: rgba(255, 191, 0, 0.873);
+    /* Couleur jaune pour notification normale */
+    color: rgb(215, 215, 215);
+    padding: 5px 15px;
+    border-radius: 15px;
+    font-size: 0.9em;
+}
+
+.notification-content.disconnected {
+    background-color: rgba(255, 0, 0, 0.8);
+    /* Couleur rouge pour déconnexion */
+}

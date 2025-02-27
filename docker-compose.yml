@@ -1,0 +1,49 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: chat-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - chat-app-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./node_server
+      dockerfile: Dockerfile
+    container_name: chat-backend
+    depends_on:
+      - mongodb
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/chat
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - chat-app-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./react_front
+      dockerfile: Dockerfile
+    container_name: chat-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - chat-app-network
+    restart: unless-stopped
+
+networks:
+  chat-app-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

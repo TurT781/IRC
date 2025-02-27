@@ -1,93 +1,278 @@
 const express = require('express');
+const cors = require('cors');
 const { createServer } = require('node:http');
 const { join } = require('node:path');
 const { Server } = require('socket.io');
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
+const mongoose = require('mongoose');
 const { availableParallelism } = require('node:os');
 const cluster = require('node:cluster');
 const { createAdapter, setupPrimary } = require('@socket.io/cluster-adapter');
 
-
 if (cluster.isPrimary) {
   const numCPUs = availableParallelism();
-  // create one worker per available core
   for (let i = 0; i < numCPUs; i++) {
-    cluster.fork({
-      PORT: 3000 + i
-    });
+    cluster.fork({ PORT: 3000 + i });
   }
-  // set up the adapter on the primary thread
-  return setupPrimary();
+  setupPrimary();
+  return;
 }
 
+async function connectDB() {
+  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chat';
+
+  // Ajout d'une logique de reconnexion avec backoff exponentiel
+  let retries = 5;
+  while (retries) {
+    try {
+      await mongoose.connect(MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+      });
+      console.log('Connected to MongoDB');
+      return;
+    } catch (err) {
+      console.error(`MongoDB connection error: ${err.message}`);
+      retries -= 1;
+      console.log(`Retries left: ${retries}`);
+
+      // Attendre avant de réessayer (backoff exponentiel)
+      const delay = (5 - retries) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  console.error('Failed to connect to MongoDB after multiple retries');
+  process.exit(1);
+}
+
+const messageSchema = new mongoose.Schema({
+  client_offset: { type: String },
+  content: String,
+  sender: { type: String, default: 'Anonymous' },
+  type: { type: String, default: 'message' },
+  isDisconnected: { type: Boolean, default: false }
+});
+
+const Message = mongoose.model('Message', messageSchema);
 
 async function main() {
-  // open the database file
-  const db = await open({
-    filename: 'chat.db',
-    driver: sqlite3.Database
-  });
-  // create our 'messages' table (you can ignore the 'client_offset' column for now)
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        client_offset TEXT UNIQUE,
-        content TEXT
-    );
-  `);
+  await connectDB();
 
   const app = express();
+  app.use(cors({
+    origin: '*',
+    credentials: true
+  }));
+
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header("Access-Control-Allow-Credentials", "true");
+
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+
+    next();
+  });
+
   const server = createServer(app);
   const io = new Server(server, {
-    connectionStateRecovery: {},
-    // set up the adapter on each worker thread
-    adapter: createAdapter()
-
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST']
+    }
   });
 
-  app.get('/', (req, res) => {
-    res.sendFile(join(__dirname, 'index.html'));
+  io.engine.on("headers", (headers, req) => {
+    headers["Access-Control-Allow-Origin"] = "*";
+    headers["Access-Control-Allow-Methods"] = "GET, POST";
+    headers["Access-Control-Allow-Headers"] = "Content-Type";
+    headers["Access-Control-Allow-Credentials"] = "true";
   });
+
+  io.adapter(createAdapter());
+  app.use(express.static(join(__dirname, '../react_front/build')));
+  app.get('*', (req, res) => {
+    res.sendFile(join(__dirname, '../react_front/build/index.html'));
+  });
+
+  let users = {};
 
   io.on('connection', async (socket) => {
-    socket.on('chat message', async (msg, clientOffset, callback) => {
-      let result;
+    console.log(`Worker ${process.pid} - Client connected: ${socket.id}`);
+
+    // Initialiser l'utilisateur
+    users[socket.id] = { nickname: "Anonymous" };
+
+    // Envoyer une notification de connexion
+    const connectMessage = `${users[socket.id].nickname} is connected`;
+
+    // Sauvegarder la notification dans la base de données
+    const newNotification = new Message({
+      content: connectMessage,
+      sender: 'System',
+      type: 'notification',
+      isDisconnected: false
+    });
+    await newNotification.save();
+
+    // Diffuser la notification à tous les clients avec isDisconnected = false
+    io.emit('user_notification', connectMessage, newNotification._id, false);
+
+    // Gestionnaire pour obtenir la liste des utilisateurs
+    socket.on('get_users', (callback) => {
       try {
-        result = await db.run('INSERT INTO messages (content, client_offset) VALUES (?, ?)', msg, clientOffset);
-      } catch (e) {
-        if (e.errno === 19 /* SQLITE_CONSTRAINT */) {
-          // the message was already inserted, so we notify the client
-          callback();
+        const userList = Object.values(users).map(user => user.nickname);
+        if (callback && typeof callback === 'function') {
+          callback(userList);
         } else {
-          // nothing to do, just let the client retry
+          socket.emit('users_list', userList);
         }
-        return;
+      } catch (e) {
+        console.error("Error getting users list:", e);
+        if (callback && typeof callback === 'function') {
+          callback([]);
+        }
       }
-      io.emit('chat message', msg, result.lastID);
-      // acknowledge the event
-      callback();
+    });
+
+    socket.on('set_nickname', (newNickname) => {
+      if (typeof newNickname === 'string' && newNickname.trim() !== '') {
+        const oldNickname = users[socket.id].nickname;
+        users[socket.id] = { nickname: newNickname.trim() };
+
+        // Informer tous les clients du changement de pseudo
+        io.emit('nickname_updated', newNickname, socket.id);
+
+        // Notification de changement de pseudo si ce n'est pas la première connexion
+        if (oldNickname !== "Anonymous" || newNickname !== oldNickname) {
+          const nicknameChangeMsg = `${oldNickname} changed is name by : ${newNickname}`;
+
+          // Créer et sauvegarder la notification de changement de pseudo
+          const changeNotification = new Message({
+            content: nicknameChangeMsg,
+            sender: 'System',
+            type: 'notification',
+            isDisconnected: false
+          });
+
+          changeNotification.save().then(savedNotification => {
+            io.emit('user_notification', nicknameChangeMsg, savedNotification._id, false);
+          });
+        }
+      }
+    });
+
+    socket.on('chat message', async (msg, clientOffset, callback) => {
+      try {
+        // Gestion de la commande /users
+        if (msg.startsWith('/users')) {
+          // Créer la liste des utilisateurs connectés
+          const userList = Object.values(users).map(user => user.nickname);
+          const userListMessage = `Users connected: ${userList.join(', ')}`;
+
+          // Sauvegarder la notification dans la base de données
+          const newNotification = new Message({
+            content: userListMessage,
+            sender: 'System',
+            type: 'notification',
+            isDisconnected: false
+          });
+          await newNotification.save();
+
+          // Envoyer la notification uniquement à l'utilisateur qui a fait la demande
+          socket.emit('user_notification', userListMessage, newNotification._id, false);
+
+          if (callback && typeof callback === 'function') {
+            callback();
+          }
+          return;
+        }
+
+        // Gestion de la commande /nickname
+        if (msg.startsWith('/nickname ')) {
+          const newNickname = msg.split(' ')[1];
+          socket.emit('set_nickname', newNickname);
+          return;
+        }
+
+        const senderNickname = users[socket.id]?.nickname || 'Anonymous';
+
+        const newMessage = new Message({
+          content: msg,
+          client_offset: clientOffset,
+          sender: senderNickname,
+          type: 'message'
+        });
+        await newMessage.save();
+
+        io.emit('chat message', msg, senderNickname, newMessage._id);
+
+        if (callback && typeof callback === 'function') {
+          callback();
+        }
+      } catch (e) {
+        console.error("Error MongoDB:", e);
+        if (e.code === 11000 && typeof callback === 'function') {
+          callback();
+        }
+      }
+    });
+
+    socket.on('disconnect', async () => {
+      const nickname = users[socket.id]?.nickname || "Anonymous";
+      console.log(`User ${nickname} disconnected.`);
+
+      // Notification de déconnexion avec le flag isDisconnected
+      const disconnectMessage = `User ${nickname} has disconnected`;
+      const newNotification = new Message({
+        content: disconnectMessage,
+        sender: 'System',
+        type: 'notification',
+        isDisconnected: true
+      });
+      await newNotification.save();
+
+      // Envoyer la notification avec isDisconnected = true
+      io.emit('user_notification', disconnectMessage, newNotification._id, true);
+
+      delete users[socket.id];
     });
 
     if (!socket.recovered) {
       try {
-        await db.each('SELECT id, content FROM messages WHERE id > ?',
-          [socket.handshake.auth.serverOffset || 0],
-          (_err, row) => {
-            socket.emit('chat message', row.content, row.id);
+        let serverOffset = socket.handshake.auth.serverOffset;
+        if (serverOffset) {
+          try {
+            serverOffset = new mongoose.Types.ObjectId(serverOffset);
+          } catch (error) {
+            console.error("Invalid ObjectId format:", serverOffset);
+            serverOffset = null;
           }
-        )
+        }
+
+        const query = serverOffset ? { _id: { $gt: serverOffset } } : {};
+        const messages = await Message.find(query);
+        messages.forEach((row) => {
+          if (row.type === 'notification') {
+            // Envoyer les notifications avec l'information isDisconnected
+            socket.emit('user_notification', row.content, row._id, row.isDisconnected || false);
+          } else {
+            // Envoyer les messages réguliers
+            socket.emit('chat message', row.content, row.sender || 'Anonymous', row._id);
+          }
+        });
       } catch (e) {
-        // something went wrong
+        console.error(e);
       }
     }
   });
 
-  // each worker will listen on a distinct port
-  const port = process.env.PORT;
-
+  const port = process.env.PORT || 3000;
   server.listen(port, () => {
-    console.log(`server running at http://localhost:${port}`);
+    console.log(`Server running at http://localhost:${port}`);
   });
 }
 
