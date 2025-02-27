@@ -8,6 +8,7 @@ const { availableParallelism } = require('node:os');
 const cluster = require('node:cluster');
 const { createAdapter, setupPrimary } = require('@socket.io/cluster-adapter');
 
+//listen on many ports
 if (cluster.isPrimary) {
   const numCPUs = availableParallelism();
   for (let i = 0; i < numCPUs; i++) {
@@ -16,11 +17,10 @@ if (cluster.isPrimary) {
   setupPrimary();
   return;
 }
-
+//connection to mongoDb
 async function connectDB() {
   const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chat';
 
-  // Ajout d'une logique de reconnexion avec backoff exponentiel
   let retries = 5;
   while (retries) {
     try {
@@ -35,7 +35,6 @@ async function connectDB() {
       retries -= 1;
       console.log(`Retries left: ${retries}`);
 
-      // Attendre avant de réessayer (backoff exponentiel)
       const delay = (5 - retries) * 1000;
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -45,6 +44,7 @@ async function connectDB() {
   process.exit(1);
 }
 
+//save the messages in the db
 const messageSchema = new mongoose.Schema({
   client_offset: { type: String },
   content: String,
@@ -58,6 +58,7 @@ const Message = mongoose.model('Message', messageSchema);
 async function main() {
   await connectDB();
 
+  //Cors Origin
   const app = express();
   app.use(cors({
     origin: '*',
@@ -102,14 +103,12 @@ async function main() {
 
   io.on('connection', async (socket) => {
     console.log(`Worker ${process.pid} - Client connected: ${socket.id}`);
-
-    // Initialiser l'utilisateur
+    
+    //default user => anonymous
     users[socket.id] = { nickname: "Anonymous" };
 
-    // Envoyer une notification de connexion
     const connectMessage = `${users[socket.id].nickname} is connected`;
 
-    // Sauvegarder la notification dans la base de données
     const newNotification = new Message({
       content: connectMessage,
       sender: 'System',
@@ -118,7 +117,7 @@ async function main() {
     });
     await newNotification.save();
 
-    // Diffuser la notification à tous les clients avec isDisconnected = false
+    //send a notification to all users connected at the server
     io.emit('user_notification', connectMessage, newNotification._id, false);
 
     // Gestionnaire pour obtenir la liste des utilisateurs
@@ -142,15 +141,13 @@ async function main() {
       if (typeof newNickname === 'string' && newNickname.trim() !== '') {
         const oldNickname = users[socket.id].nickname;
         users[socket.id] = { nickname: newNickname.trim() };
-
-        // Informer tous les clients du changement de pseudo
+        
+        //send a message to all users that someone has chnaged his name
         io.emit('nickname_updated', newNickname, socket.id);
-
-        // Notification de changement de pseudo si ce n'est pas la première connexion
         if (oldNickname !== "Anonymous" || newNickname !== oldNickname) {
           const nicknameChangeMsg = `${oldNickname} changed is name by : ${newNickname}`;
 
-          // Créer et sauvegarder la notification de changement de pseudo
+          //save the new nickname in the database
           const changeNotification = new Message({
             content: nicknameChangeMsg,
             sender: 'System',
@@ -167,13 +164,13 @@ async function main() {
 
     socket.on('chat message', async (msg, clientOffset, callback) => {
       try {
-        // Gestion de la commande /users
+        //commands Users
         if (msg.startsWith('/users')) {
           // Créer la liste des utilisateurs connectés
           const userList = Object.values(users).map(user => user.nickname);
           const userListMessage = `Users connected: ${userList.join(', ')}`;
-
-          // Sauvegarder la notification dans la base de données
+          
+          //saving that in the db
           const newNotification = new Message({
             content: userListMessage,
             sender: 'System',
@@ -181,8 +178,8 @@ async function main() {
             isDisconnected: false
           });
           await newNotification.save();
-
-          // Envoyer la notification uniquement à l'utilisateur qui a fait la demande
+          
+          //emit the notif at the user who wrote the commands
           socket.emit('user_notification', userListMessage, newNotification._id, false);
 
           if (callback && typeof callback === 'function') {
@@ -190,8 +187,8 @@ async function main() {
           }
           return;
         }
-
-        // Gestion de la commande /nickname
+        
+        //commands nickname
         if (msg.startsWith('/nickname ')) {
           const newNickname = msg.split(' ')[1];
           socket.emit('set_nickname', newNickname);
@@ -225,7 +222,7 @@ async function main() {
       const nickname = users[socket.id]?.nickname || "Anonymous";
       console.log(`User ${nickname} disconnected.`);
 
-      // Notification de déconnexion avec le flag isDisconnected
+      //notification of deconnection 
       const disconnectMessage = `User ${nickname} has disconnected`;
       const newNotification = new Message({
         content: disconnectMessage,
@@ -234,8 +231,7 @@ async function main() {
         isDisconnected: true
       });
       await newNotification.save();
-
-      // Envoyer la notification avec isDisconnected = true
+      //then send it to the users who left the serveer
       io.emit('user_notification', disconnectMessage, newNotification._id, true);
 
       delete users[socket.id];
@@ -257,10 +253,8 @@ async function main() {
         const messages = await Message.find(query);
         messages.forEach((row) => {
           if (row.type === 'notification') {
-            // Envoyer les notifications avec l'information isDisconnected
             socket.emit('user_notification', row.content, row._id, row.isDisconnected || false);
           } else {
-            // Envoyer les messages réguliers
             socket.emit('chat message', row.content, row.sender || 'Anonymous', row._id);
           }
         });

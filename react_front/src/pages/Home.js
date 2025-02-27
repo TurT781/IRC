@@ -36,7 +36,6 @@ function Home() {
       socket.auth.serverOffset = serverOffset;
     });
 
-    // Écouteur pour les notifications avec isDisconnected
     socket.on("user_notification", (content, serverOffset, isDisconnected = false) => {
       const timestamp = new Date();
       setMessages((prevMessages) => [
@@ -54,11 +53,8 @@ function Home() {
       }
     });
 
-    // Optionnel: Ajouter un écouteur spécifique pour la liste des utilisateurs
     socket.on("users_list", (userList) => {
       console.log("Users list received:", userList);
-      // Cette partie est optionnelle car nous utilisons déjà user_notification
-      // pour afficher la liste des utilisateurs
     });
 
     return () => {
@@ -66,15 +62,13 @@ function Home() {
       socket.off("connect");
       socket.off("nickname_updated");
       socket.off("user_notification");
-      socket.off("users_list"); // Nettoyer l'écouteur si ajouté
+      socket.off("users_list");
     };
   }, []);
 
   const sendMessage = (message) => {
     if (message.startsWith("/users")) {
-      // Traitement côté client de la commande /users
       socket.emit("chat message", message, `${socket.id}-${Date.now()}`, () => {
-        // Callback vide pour confirmer l'envoi
       });
     } else if (message.startsWith("/nickname ")) {
       const newNickname = message.split(" ")[1];
@@ -91,6 +85,7 @@ function Home() {
   return (
     <main className="mainSection">
       <div className="textHome">
+    {/* //TODO {serverName} for H1 */}
         <h1>Server 1</h1>
         <p>Connected as : <strong>{nickname}</strong></p>
       </div>

@@ -1,7 +1,7 @@
-import React, {useEffect, useRef} from "react";
+import React, { useEffect, useRef } from "react";
 import "../CSS/Messages.css";
 
-const Messages = ({messages}) => {
+const Messages = ({ messages }) => {
   const messagesEndRef = useRef(null);
 
   const formatDate = (date) => {
@@ -46,4 +46,3 @@ const Messages = ({messages}) => {
 };
 
 export default Messages;
-//backup22.35
