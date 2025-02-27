@@ -1,7 +1,7 @@
 # **IRC Project - WebSockets, React, Node.js & MongoDB** 🚀
 
 ## **Project Description**
-✍ **To be completed:** Explain in a few sentences the purpose of the project and what it allows users to do.
+✍ **Websokat** is an IRC, in other word it looks like minecraft chat. Allows you to talk with anyone, and using commands by *"`/commands`"*. 
 
 ## **Technologies Used** 💻
 - **Front-end:** React
@@ -17,7 +17,7 @@
 - **Messenger-like interface** with:
   - Text input area
   - "Send" button
-  - "Quit" button
+  - "Leave" button
   - Command handling via input
 
 ## **Installation and Startup** 🔧
